@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveConfig } from "../lib/config.mjs";
 import { runWithLock } from "../lib/lock.mjs";
 import {
@@ -16,6 +19,9 @@ import {
   signRun,
 } from "../lib/state.mjs";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ATTENTION_SCRIPT = path.resolve(__dirname, "..", "skills", "crucible", "scripts", "pr-attention.sh");
+
 const USAGE = `crucible — deterministic state machine, lock, and gates for autonomous software runs
 
 Usage:
@@ -32,6 +38,7 @@ Usage:
   crucible gate <run-dir> <implement|tidy|council|pr-open|pr-ready|pr-watch|done> [--repo <dir>] [--override-council]
   crucible pause <run-dir> --reason <text>
   crucible status [<run-dir>] [--all]
+  crucible attention
 `;
 
 function splitOnDashDash(argv) {
@@ -212,6 +219,12 @@ async function main() {
       } else {
         printJson(getStatus(positional[0]));
       }
+      return;
+    }
+    case "attention": {
+      const res = spawnSync("sh", [ATTENTION_SCRIPT], { stdio: "inherit", env: process.env });
+      if (res.error) throw res.error;
+      process.exitCode = res.status ?? 1;
       return;
     }
     default:

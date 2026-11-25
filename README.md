@@ -135,6 +135,16 @@ crucible config --repo /path/to/repo
 | `crucible gate <run-dir> <phase>` | Enforce deterministic phase invariants before advancing |
 | `crucible pause <run-dir> --reason <text>` | Pause run for human decision |
 | `crucible status [<run-dir>] [--all]` | Inspect one run or list all runs across repos |
+| `crucible attention` | Read-only triage of open GitHub PRs waiting on you (requires `gh` + `jq`) |
+
+## Built-in PR playbooks
+
+Crucible bundles standalone, repo-agnostic PR handling playbooks under `skills/crucible/references/` (all overridable via `hooks` in `~/.config/crucible/config.json`):
+
+- **`pr-open.md`** — Pre-flight gates, matching repository title/language style, draft PR format with council review table, CI auto-fix loop, and marking ready on green.
+- **`pr-comments.md`** — Collecting open comments and unresolved GraphQL review threads, judging every finding against current code, fixing or rebutting with evidence, and watching via `watch_pull_request`.
+- **`comment-voice.md`** — Direct, warm, evidence-first PR comment voice with author/reviewer role checks, disclosure box for substantive agent-augmented reviews, and pre-post secret checks.
+- **`pr-attention.md`** (+ `crucible attention`) — Read-only GitHub PR inbox grouped by urgency (`Review requested`, `Your PRs`, `Assigned`, `Mentions`, `Re-review`), ignoring drafts.
 
 ## Hard invariants
 

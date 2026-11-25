@@ -289,4 +289,72 @@ describe("crucible", () => {
     assert.equal(statusOut.runs.length, 1);
     assert.equal(statusOut.runs[0].slug, "cli-smoke");
   });
+
+  it("formats PR attention buckets via report.jq and excludes drafts", () => {
+    const jqPath = path.resolve(__dirname, "..", "skills", "crucible", "scripts", "report.jq");
+    const nowIso = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+    const sample = [
+      {
+        number: 10,
+        title: "Draft WIP",
+        url: "https://github.com/acme/app/pull/10",
+        isDraft: true,
+        reviewDecision: "",
+        mergeable: "MERGEABLE",
+        mergeStateStatus: "CLEAN",
+        statusCheckRollup: [],
+        updatedAt: nowIso,
+        createdAt: nowIso,
+        author: { login: "alice" },
+        reviews: [],
+        comments: [],
+        commits: [],
+        flags: ["review"],
+      },
+      {
+        number: 11,
+        title: "Fix auth",
+        url: "https://github.com/acme/app/pull/11",
+        isDraft: false,
+        reviewDecision: "",
+        mergeable: "MERGEABLE",
+        mergeStateStatus: "CLEAN",
+        statusCheckRollup: [],
+        updatedAt: nowIso,
+        createdAt: nowIso,
+        author: { login: "bob" },
+        reviews: [],
+        comments: [],
+        commits: [],
+        flags: ["review"],
+      },
+      {
+        number: 12,
+        title: "Add billing",
+        url: "https://github.com/acme/app/pull/12",
+        isDraft: false,
+        reviewDecision: "CHANGES_REQUESTED",
+        mergeable: "MERGEABLE",
+        mergeStateStatus: "CLEAN",
+        statusCheckRollup: [],
+        updatedAt: nowIso,
+        createdAt: nowIso,
+        author: { login: "me" },
+        reviews: [],
+        comments: [],
+        commits: [],
+        flags: ["authored"],
+      },
+    ];
+    const out = execFileSync("jq", ["-rs", "--arg", "me", "me", "-f", jqPath], {
+      input: sample.map((x) => JSON.stringify(x)).join("\n"),
+      encoding: "utf8",
+    });
+    assert.match(out, /\*\*2 PRs need attention\.\*\*/);
+    assert.match(out, /## Review requested/);
+    assert.match(out, /acme\/app#11/);
+    assert.match(out, /## Your PRs/);
+    assert.match(out, /acme\/app#12/);
+    assert.doesNotMatch(out, /Draft WIP/);
+  });
 });

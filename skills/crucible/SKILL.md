@@ -51,10 +51,19 @@ Read the repository's `AGENTS.md` (or `CLAUDE.md`) as well. If `hooks.workflowSk
    - Run bounded hub-and-spoke multi-model review rounds (default max 3 rounds) until `0` blockers and every council member scores `>= minScore` (default `9/10`).
    - Record every round with `crucible record-council`. If a round requires edits, commit and re-run `crucible verify` before the next round (plus a quick tidy check on heavily refactored files).
    - Advance the gate: `crucible gate <run-dir> pr-open`.
-6. **PR Open, CI Green, Mark Ready & Watch** — Follow [references/pr.md](references/pr.md).
+6. **PR Open, CI Green & Mark Ready** — Follow [references/pr-open.md](references/pr-open.md).
    - Run optional `hooks.prePrOpen` / `hooks.prePrOpenSkill`, open a draft PR with the council score table in the description, record it with `crucible record-pr`, and watch CI via `watch_pull_request`.
    - Auto-fix CI failures within `budgets.ciFixPushes`. Once CI is green on `HEAD`, run `crucible record-ci --status green`, `crucible gate <run-dir> pr-ready`, and mark the PR ready for review (never merge).
-   - Advance to `crucible gate <run-dir> pr-watch` and keep watching with `watch_pull_request`, handling incoming review comments and clean base conflicts within `budgets.prWatchPushes`.
+7. **Autonomous PR Watch & Comments** — Follow [references/pr-comments.md](references/pr-comments.md) and [references/comment-voice.md](references/comment-voice.md).
+   - Advance to `crucible gate <run-dir> pr-watch` and keep watching with `watch_pull_request`, handling incoming review comments (fixing valid issues, rebutting false positives, replying in the comment voice) and clean base conflicts within `budgets.prWatchPushes`.
+
+### Standalone PR utilities
+
+You can also invoke Crucible's built-in PR playbooks directly outside a full factory run:
+- **Open a PR:** follow [references/pr-open.md](references/pr-open.md)
+- **Handle / watch PR comments:** follow [references/pr-comments.md](references/pr-comments.md)
+- **Draft or post a PR comment:** follow [references/comment-voice.md](references/comment-voice.md)
+- **Check what PRs need attention:** run `crucible attention` and follow [references/pr-attention.md](references/pr-attention.md)
 
 ### Mode B: Parallel batch run (`/crucible batch`)
 
