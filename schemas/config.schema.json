@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Crucible User or Repository Config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "defaults": {
+      "$ref": "#/$defs/profileSettings"
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "type": "object",
+            "required": ["match"],
+            "properties": {
+              "match": {
+                "type": "string",
+                "description": "Path glob matched against the resolved repository path (supports ~, *, **)."
+              }
+            }
+          },
+          { "$ref": "#/$defs/profileSettings" }
+        ]
+      }
+    },
+    "council": { "$ref": "#/$defs/council" },
+    "budgets": { "$ref": "#/$defs/budgets" },
+    "pr": { "$ref": "#/$defs/pr" },
+    "verify": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "hooks": { "$ref": "#/$defs/hooks" }
+  },
+  "$defs": {
+    "council": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "model"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "provider": { "type": "string" },
+              "model": { "type": "string" },
+              "options": { "type": "object" }
+            }
+          }
+        },
+        "minScore": { "type": "number", "minimum": 1, "maximum": 10 },
+        "maxRounds": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "specCouncil": { "enum": ["always", "auto", "never"] }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "councilRounds": { "type": "integer", "minimum": 1 },
+        "ciFixPushes": { "type": "integer", "minimum": 0 },
+        "prWatchPushes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "pr": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "markReadyOnGreen": { "type": "boolean" },
+        "autoMergeCleanBase": { "type": "boolean" },
+        "resolveHumanThreads": { "type": "boolean" },
+        "language": { "type": "string" },
+        "reviewers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "neverMerge": { "const": true },
+        "neverForcePush": { "const": true }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "postWorktreeSetup": { "type": "string" },
+        "prePrOpen": { "type": "string" },
+        "postPrOpen": { "type": "string" },
+        "workflowSkill": { "type": "string" },
+        "prePrOpenSkill": { "type": "string" },
+        "commentVoiceSkill": { "type": "string" }
+      }
+    },
+    "profileSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "council": { "$ref": "#/$defs/council" },
+        "budgets": { "$ref": "#/$defs/budgets" },
+        "pr": { "$ref": "#/$defs/pr" },
+        "verify": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "hooks": { "$ref": "#/$defs/hooks" }
+      }
+    }
+  }
+}

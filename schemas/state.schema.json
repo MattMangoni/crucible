@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Crucible Run State",
+  "type": "object",
+  "required": ["version", "slug", "repo", "phase", "updatedAt", "budgetsUsed"],
+  "properties": {
+    "version": { "const": 1 },
+    "slug": { "type": "string" },
+    "repo": { "type": "string" },
+    "phase": {
+      "enum": ["grill", "implement", "tidy", "council", "pr-open", "pr-ready", "pr-watch", "paused", "done"]
+    },
+    "previousPhase": { "type": ["string", "null"] },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "verifiedSha": { "type": ["string", "null"] },
+    "verifiedClean": { "type": "boolean" },
+    "verifiedAt": { "type": ["string", "null"] },
+    "tidySha": { "type": ["string", "null"] },
+    "tidySummary": { "type": ["string", "null"] },
+    "councilPassed": { "type": "boolean" },
+    "councilSha": { "type": ["string", "null"] },
+    "councilRounds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["round", "sha", "scores", "blockers", "passed", "recordedAt"],
+        "properties": {
+          "round": { "type": "integer" },
+          "sha": { "type": "string" },
+          "scores": { "type": "object" },
+          "blockers": { "type": "integer" },
+          "passed": { "type": "boolean" },
+          "notes": { "type": ["string", "null"] },
+          "recordedAt": { "type": "string" }
+        }
+      }
+    },
+    "prUrl": { "type": ["string", "null"] },
+    "prReady": { "type": "boolean" },
+    "ciStatus": { "enum": [null, "green", "failed"] },
+    "ciSha": { "type": ["string", "null"] },
+    "pauseReason": { "type": ["string", "null"] },
+    "budgetsUsed": {
+      "type": "object",
+      "required": ["councilRounds", "ciFixPushes", "prWatchPushes"],
+      "properties": {
+        "councilRounds": { "type": "integer" },
+        "ciFixPushes": { "type": "integer" },
+        "prWatchPushes": { "type": "integer" }
+      }
+    }
+  }
+}

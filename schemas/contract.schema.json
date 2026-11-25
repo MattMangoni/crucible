@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Crucible Signed Run Contract",
+  "type": "object",
+  "required": [
+    "version",
+    "slug",
+    "repo",
+    "base",
+    "branch",
+    "createdAt",
+    "signedAt",
+    "council",
+    "budgets",
+    "pr",
+    "verify",
+    "hooks"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "slug": { "type": "string" },
+    "repo": { "type": "string" },
+    "base": { "type": "string" },
+    "branch": { "type": "string" },
+    "ticket": { "type": ["string", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "signedAt": { "type": ["string", "null"], "format": "date-time" },
+    "council": { "type": "object" },
+    "budgets": { "type": "object" },
+    "pr": {
+      "type": "object",
+      "required": ["neverMerge", "neverForcePush"],
+      "properties": {
+        "neverMerge": { "const": true },
+        "neverForcePush": { "const": true }
+      }
+    },
+    "verify": { "type": "array", "items": { "type": "string" } },
+    "hooks": { "type": "object" }
+  }
+}

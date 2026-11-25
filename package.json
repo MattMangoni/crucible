@@ -1,0 +1,27 @@
+{
+  "name": "crucible",
+  "version": "0.1.0",
+  "description": "Autonomous software factory for T3 Code: heavy upfront grilling, multi-model council review, deterministic gates, and automated PR handling.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "crucible": "./bin/crucible.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MattMangoni/crucible.git"
+  },
+  "keywords": [
+    "ai-agents",
+    "software-factory",
+    "t3-code",
+    "code-review",
+    "agent-skills"
+  ]
+}
