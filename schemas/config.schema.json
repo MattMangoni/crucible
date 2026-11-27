@@ -49,7 +49,17 @@
               "name": { "type": "string" },
               "provider": { "type": "string" },
               "model": { "type": "string" },
-              "options": { "type": "object" }
+              "options": { "type": "object" },
+              "minScore": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 10,
+                "description": "Optional per-member passing score threshold overriding council.minScore."
+              },
+              "calibration": {
+                "type": "string",
+                "description": "Optional per-member review instructions appended to this member's council prompt."
+              }
             }
           }
         },

@@ -48,7 +48,7 @@ Read the repository's `AGENTS.md` (or `CLAUDE.md`) as well. If `hooks.workflowSk
    - Run the 2-agent read-only DRY/KISS cleanup pass, apply valid fixes, commit, re-run `crucible verify`, and run `crucible record-tidy <run-dir>`.
    - Advance the gate: `crucible gate <run-dir> council`.
 5. **Council Loop** — Follow [references/council.md](references/council.md).
-   - Run bounded hub-and-spoke multi-model review rounds (default max 3 rounds) until `0` blockers and every council member scores `>= minScore` (default `9/10`).
+   - Run bounded hub-and-spoke multi-model review rounds (default max 5 rounds) until `0` blockers and every council member meets its threshold (`member.minScore ?? minScore`, default `9/10`).
    - Record every round with `crucible record-council`. If a round requires edits, commit and re-run `crucible verify` before the next round (plus a quick tidy check on heavily refactored files).
    - Advance the gate: `crucible gate <run-dir> pr-open`.
 6. **PR Open, CI Green & Mark Ready** — Follow [references/pr-open.md](references/pr-open.md).

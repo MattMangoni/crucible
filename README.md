@@ -19,10 +19,12 @@ Built to run on top of your existing subscriptions (Claude, Codex, Antigravity) 
 3. TIDY          2-agent read-only DRY/KISS cleanup pass → apply → verify
                        │
                        ▼
-4. COUNCIL       Bounded hub-and-spoke multi-model review (default max 3 rounds)
+4. COUNCIL       Bounded hub-and-spoke multi-model review (default max 5 rounds)
+                 → Round 1 exhaustive audit; Round 2+ delta convergence review
+                 → severity-anchored rubric + adversarial check before scoring >= 9
                  → coordinator judges findings against code + spec.md
                  → applies valid fixes + logs rejections in rebuttals.md
-                 → exits on 0 blockers & >= 9/10 across all members
+                 → exits on 0 blockers & every member >= minScore (default 9/10)
                        │
                        ▼
 5. PR & CI       `crucible gate pr-open` → draft PR + council score table
@@ -81,11 +83,11 @@ Create an optional `~/.config/crucible/config.json` (and/or `.crucible.json` ins
         { "name": "Gemini 4 Neon", "provider": "antigravity", "model": "gemini-4-neon", "options": { "thought_level": "high" } }
       ],
       "minScore": 9,
-      "maxRounds": 3,
+      "maxRounds": 5,
       "specCouncil": "auto"
     },
     "budgets": {
-      "councilRounds": 3,
+      "councilRounds": 5,
       "ciFixPushes": 3,
       "prWatchPushes": 5
     },
@@ -117,6 +119,10 @@ Inspect the resolved config for any repo:
 ```sh
 crucible config --repo /path/to/repo
 ```
+
+Each entry in `council.members` also accepts two optional calibration fields:
+- `minScore` (number, `1–10`) — overrides `council.minScore` for that member only.
+- `calibration` (string) — extra review guidance appended verbatim to that member's council prompt.
 
 ## CLI reference
 

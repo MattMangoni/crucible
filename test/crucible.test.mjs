@@ -76,7 +76,7 @@ describe("crucible", () => {
   let origEnv;
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "crucible-test-"));
+    tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "crucible-test-")));
     origEnv = {
       CRUCIBLE_CONFIG: process.env.CRUCIBLE_CONFIG,
       CRUCIBLE_STATE_DIR: process.env.CRUCIBLE_STATE_DIR,
@@ -126,6 +126,8 @@ describe("crucible", () => {
 
     const resolved = resolveConfig(acmeDir);
     assert.equal(resolved.config.council.minScore, 9);
+    assert.equal(resolved.config.council.maxRounds, 5);
+    assert.equal(resolved.config.budgets.councilRounds, 5);
     assert.equal(resolved.config.hooks.postWorktreeSetup, "/usr/local/bin/setup");
     assert.equal(resolved.config.pr.language, "it");
     assert.deepEqual(resolved.config.verify, ["pnpm lint", "pnpm test"]);
@@ -251,6 +253,106 @@ describe("crucible", () => {
     assert.equal(status.phase, "done");
     assert.equal(status.prReady, true);
     assert.equal(listRuns().length, 1);
+  });
+
+  it("supports per-member minScore overrides and calibration config, and enforces the 5-round default cap", () => {
+    const repo = makeTempRepo(tmp, "calibration-repo");
+    fs.writeFileSync(
+      process.env.CRUCIBLE_CONFIG,
+      JSON.stringify({
+        defaults: {
+          council: {
+            minScore: 9,
+            members: [
+              {
+                name: "Claude Opus 5.5",
+                provider: "claudeAgent",
+                model: "claude-opus-5-5",
+                minScore: 10,
+                calibration: "Be extra skeptical before awarding 10/10.",
+              },
+              {
+                name: "GPT 6.2 Sol",
+                provider: "codex",
+                model: "gpt-6.2-sol",
+                minScore: 8,
+                calibration: "Do not deduct below 9 for minor nits.",
+              },
+              {
+                name: "Gemini 4 Neon",
+                provider: "antigravity",
+                model: "gemini-4-neon",
+              },
+            ],
+          },
+        },
+      }),
+      "utf8"
+    );
+
+    const resolved = resolveConfig(repo);
+    assert.equal(resolved.config.council.maxRounds, 5);
+    assert.equal(resolved.config.budgets.councilRounds, 5);
+    assert.equal(resolved.config.council.members[0].minScore, 10);
+    assert.equal(resolved.config.council.members[0].calibration, "Be extra skeptical before awarding 10/10.");
+    assert.equal(resolved.config.council.members[1].minScore, 8);
+
+    const run = initRun({ slug: "calibration-test", repoDir: repo });
+
+    // Round 1: Opus scores 9 (below its 10 override) -> fails even though GPT 8 meets its 8 override and Gemini 9 meets global 9.
+    const r1 = recordCouncil(run.runDir, {
+      repoDir: repo,
+      round: 1,
+      scores: { "Claude Opus 5.5": 9, "GPT 6.2 Sol": 8, "Gemini 4 Neon": 9 },
+      blockers: 0,
+    });
+    assert.equal(r1.ok, true);
+    assert.equal(r1.passed, false);
+    assert.equal(r1.remainingRounds, 4);
+    assert.equal(r1.nextAction, "fix-and-reverify");
+
+    // Round 2: GPT scores 7 (below its 8 override) -> fails.
+    const r2 = recordCouncil(run.runDir, {
+      repoDir: repo,
+      round: 2,
+      scores: { "Claude Opus 5.5": 10, "GPT 6.2 Sol": 7, "Gemini 4 Neon": 9 },
+      blockers: 0,
+    });
+    assert.equal(r2.passed, false);
+    assert.equal(r2.remainingRounds, 3);
+
+    // Round 3: Gemini scores 8 (below global 9) -> fails.
+    const r3 = recordCouncil(run.runDir, {
+      repoDir: repo,
+      round: 3,
+      scores: { "Claude Opus 5.5": 10, "GPT 6.2 Sol": 8, "Gemini 4 Neon": 8 },
+      blockers: 0,
+    });
+    assert.equal(r3.passed, false);
+    assert.equal(r3.remainingRounds, 2);
+
+    // Round 4: All meet their respective thresholds (Opus 10, GPT 8, Gemini 9) -> passes.
+    const r4 = recordCouncil(run.runDir, {
+      repoDir: repo,
+      round: 4,
+      scores: { "Claude Opus 5.5": 10, "GPT 6.2 Sol": 8, "Gemini 4 Neon": 9 },
+      blockers: 0,
+    });
+    assert.equal(r4.passed, true);
+    assert.equal(r4.remainingRounds, 1);
+    assert.equal(r4.nextAction, "proceed-to-pr-open");
+
+    // Round 5 (failing) exhausts the 5-round default cap and escalates.
+    const r5 = recordCouncil(run.runDir, {
+      repoDir: repo,
+      round: 5,
+      scores: { "Claude Opus 5.5": 9, "GPT 6.2 Sol": 8, "Gemini 4 Neon": 9 },
+      blockers: 0,
+    });
+    assert.equal(r5.passed, false);
+    assert.equal(r5.remainingRounds, 0);
+    assert.equal(r5.nextAction, "escalate-to-user");
+    assert.equal(getStatus(run.runDir).phase, "paused");
   });
 
   it("enforces push budgets and pauses when exhausted", () => {
