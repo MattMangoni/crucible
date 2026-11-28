@@ -16,6 +16,7 @@ import {
   listRuns,
   recordCi,
   recordCouncil,
+  recordCouncilFollowup,
   recordPr,
   recordTidy,
   recordVerify,
@@ -200,6 +201,7 @@ describe("crucible", () => {
       round: 1,
       scores: { "Claude Opus 5.5": 8, "GPT 6.2 Sol": 9, "Gemini 4 Neon": 8 },
       blockers: 1,
+      majors: 0,
     });
     assert.equal(r1.ok, true);
     assert.equal(r1.passed, false);
@@ -216,6 +218,7 @@ describe("crucible", () => {
       round: 2,
       scores: { "Claude Opus 5.5": 9, "GPT 6.2 Sol": 10, "Gemini 4 Neon": 9 },
       blockers: 0,
+      majors: 0,
     });
     assert.equal(r2.passed, true);
 
@@ -234,6 +237,7 @@ describe("crucible", () => {
       round: 3,
       scores: { "Claude Opus 5.5": 9, "GPT 6.2 Sol": 9, "Gemini 4 Neon": 10 },
       blockers: 0,
+      majors: 0,
     });
     assert.equal(r3.passed, true);
     assert.equal(gatePhase(run.runDir, "pr-open", { repoDir: repo }).ok, true);
@@ -263,6 +267,7 @@ describe("crucible", () => {
         defaults: {
           council: {
             minScore: 9,
+            passRule: "scores",
             members: [
               {
                 name: "Claude Opus 5.5",
@@ -353,6 +358,136 @@ describe("crucible", () => {
     assert.equal(r5.remainingRounds, 0);
     assert.equal(r5.nextAction, "escalate-to-user");
     assert.equal(getStatus(run.runDir).phase, "paused");
+  });
+
+  function councilReadyRun(slug, { heavy = false } = {}) {
+    const repo = makeTempRepo(tmp, `${slug}-repo`);
+    const run = initRun({ slug, repoDir: repo });
+    fillValidSpec(run.specPath);
+    assert.equal(signRun(run.runDir, { heavy }).ok, true);
+    commitAndVerify(repo, run, "v1");
+    assert.equal(recordTidy(run.runDir, { repoDir: repo }).ok, true);
+    assert.equal(gatePhase(run.runDir, "council", { repoDir: repo }).ok, true);
+    return { repo, run };
+  }
+
+  function commitAndVerify(repo, run, content) {
+    fs.writeFileSync(path.join(repo, "widget.js"), `export const widget = "${content}";\n`, "utf8");
+    git(["add", "widget.js"], repo);
+    git(["commit", "-m", `fix: ${content}`], repo);
+    assert.equal(recordVerify(run.runDir, { repoDir: repo, exitCode: 0 }).ok, true);
+  }
+
+  it("defaults to the convergence rule with a calibrated GPT member and a heavy-change round cap", () => {
+    const repo = makeTempRepo(tmp, "defaults-repo");
+    const { config } = resolveConfig(repo);
+    assert.equal(config.council.passRule, "convergence");
+    assert.equal(config.council.heavyMaxRounds, 3);
+    assert.match(config.council.members.find((m) => m.provider === "codex").calibration, /minor/);
+
+    const { run } = councilReadyRun("heavy", { heavy: true });
+    const contract = JSON.parse(fs.readFileSync(run.contractPath, "utf8"));
+    assert.equal(contract.council.maxRounds, 3);
+    assert.equal(contract.council.heavy, true);
+  });
+
+  it("passes a converged round despite one low score, and requires --majors", () => {
+    const { repo, run } = councilReadyRun("converge");
+    const missing = recordCouncil(run.runDir, {
+      repoDir: repo,
+      scores: { A: 9, B: 8, C: 9 },
+      blockers: 0,
+    });
+    assert.equal(missing.ok, false);
+    assert.match(missing.errors[0], /majors is required/);
+
+    const r1 = recordCouncil(run.runDir, { repoDir: repo, scores: { A: 9, B: 8, C: 9 }, blockers: 0, majors: 1 });
+    assert.equal(r1.passed, false);
+
+    commitAndVerify(repo, run, "v2");
+    const r2 = recordCouncil(run.runDir, { repoDir: repo, scores: { A: 9, B: 8, C: 10 }, blockers: 0, majors: 0 });
+    assert.equal(r2.passed, true);
+    assert.equal(r2.medianScore, 9);
+    assert.equal(r2.nextAction, "proceed-to-pr-open");
+    assert.equal(gatePhase(run.runDir, "pr-open", { repoDir: repo }).ok, true);
+  });
+
+  it("rejects a majority of low scores when no fix-hunk majors explain them", () => {
+    const { repo, run } = councilReadyRun("majority");
+    const r1 = recordCouncil(run.runDir, { repoDir: repo, scores: { A: 8, B: 8, C: 9 }, blockers: 0, majors: 0 });
+    assert.equal(r1.passed, false);
+  });
+
+  it("closes fix-hunk majors with a verified follow-up instead of another round", () => {
+    const { repo, run } = councilReadyRun("followup");
+    const early = recordCouncil(run.runDir, {
+      repoDir: repo,
+      scores: { A: 8, B: 8, C: 8 },
+      blockers: 0,
+      majors: 0,
+      fixMajors: 1,
+    });
+    assert.equal(early.ok, false);
+    assert.match(early.errors[0], /previous round/);
+
+    recordCouncil(run.runDir, { repoDir: repo, scores: { A: 8, B: 7, C: 8 }, blockers: 0, majors: 2 });
+    commitAndVerify(repo, run, "v2");
+    const r2 = recordCouncil(run.runDir, {
+      repoDir: repo,
+      scores: { A: 8, B: 8, C: 8 },
+      blockers: 0,
+      majors: 0,
+      fixMajors: 1,
+    });
+    assert.equal(r2.passed, true);
+    assert.equal(r2.nextAction, "apply-followup-fixes");
+    const blocked = gatePhase(run.runDir, "pr-open", { repoDir: repo });
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.errors.join("\n"), /--followup/);
+
+    assert.equal(recordCouncilFollowup(run.runDir, { repoDir: repo }).ok, false);
+    commitAndVerify(repo, run, "v3");
+    const done = recordCouncilFollowup(run.runDir, { repoDir: repo, notes: "guarded the new branch" });
+    assert.equal(done.ok, true);
+    assert.equal(recordCouncilFollowup(run.runDir, { repoDir: repo }).ok, false);
+    assert.equal(gatePhase(run.runDir, "pr-open", { repoDir: repo }).ok, true);
+    const status = getStatus(run.runDir);
+    assert.equal(status.councilRounds, 2);
+    assert.equal(status.budgetsUsed.councilRounds, 2);
+  });
+
+  it("requires a redesign note when the same area fails two rounds running", () => {
+    const { repo, run } = councilReadyRun("hotspot");
+    const round = (areas) =>
+      recordCouncil(run.runDir, { repoDir: repo, scores: { A: 8, B: 8, C: 8 }, blockers: 0, majors: 1, areas });
+
+    assert.deepEqual(round("app/player.tsx,lib/a.ts").hotspots, []);
+    commitAndVerify(repo, run, "v2");
+    const r2 = round("app/player.tsx");
+    assert.deepEqual(r2.hotspots, ["app/player.tsx"]);
+    assert.equal(r2.nextAction, "redesign-hotspots");
+
+    commitAndVerify(repo, run, "v3");
+    const refused = round("lib/b.ts");
+    assert.equal(refused.ok, false);
+    assert.match(refused.errors[0], /redesign/);
+
+    fs.writeFileSync(r2.redesignNote, "Player bar: replaced the overlay with a docked strip.\n", "utf8");
+    const r3 = round("lib/b.ts");
+    assert.equal(r3.ok, true);
+    assert.deepEqual(r3.hotspots, []);
+    assert.equal(getStatus(run.runDir).pendingRedesign, null);
+  });
+
+  it("keeps the scores rule for contracts signed before passRule existed", () => {
+    const { repo, run } = councilReadyRun("legacy");
+    const contract = JSON.parse(fs.readFileSync(run.contractPath, "utf8"));
+    delete contract.council.passRule;
+    fs.writeFileSync(run.contractPath, JSON.stringify(contract), "utf8");
+    const r1 = recordCouncil(run.runDir, { repoDir: repo, scores: { A: 9, B: 8, C: 9 }, blockers: 0 });
+    assert.equal(r1.ok, true);
+    assert.equal(r1.passed, false);
+    assert.equal(r1.passRule, "scores");
   });
 
   it("enforces push budgets and pauses when exhausted", () => {

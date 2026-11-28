@@ -9,6 +9,12 @@ Crucible uses a **hub-and-spoke adversarial loop**, not unstructured agent-to-ag
 
 1. Ensure working tree is clean and `verifiedSha === HEAD`.
 2. Resolve the configured `contract.council.members` via `orchestrator_capabilities` (already called once per thread). If a configured provider or model is unavailable, report it and pause instead of silently substituting.
+3. **Rendering check** (`contract.council.renderCheck`: `always`, or `auto` when the diff touches UI: components, styles, templates, layout). Static review is blind to layout, so the coordinator drives the app itself before launching members:
+   - Start the app the way the repo documents it and open each changed screen with the browser preview tools at **desktop (1280×800)**, **phone (390×844)**, and **narrow (320×640)**.
+   - Check overflow and horizontal scroll, overlap (nothing covering embeds, players, or dialogs), clipped text, tap targets, focus rings, and the loading, empty, and error states the spec names.
+   - Fix what you find (commit and re-verify), then put a short render report in the round prompt (viewport → what was checked → issues fixed or none) so members don't spend findings on layout guesses.
+   - Close any preview tabs you opened. If the app cannot run locally, say so in the round prompt and in `council/round-<N>.md`.
+4. **Hot spots:** if the previous `record-council` returned `nextAction: "redesign-hotspots"`, do not patch those areas again. Redesign them (simpler state model, different structure, or drop the fragile behavior if the spec allows) and write the reasoning to the `redesignNote` path it returned (`<run-dir>/council/redesign-<N>.md`) before the round. `record-council` refuses the next round until that note exists.
 
 ## Running Round N
 
@@ -23,6 +29,7 @@ Crucible uses a **hub-and-spoke adversarial loop**, not unstructured agent-to-ag
        - Verify prior accepted findings were fixed properly and check the fix hunks for regressions.
        - Inspect `rebuttals.md`: drop settled points, or explicitly push back with concrete evidence if a rebuttal is wrong.
        - **Convergence rule:** Do **not** raise new `minor`/nit findings on untouched code from earlier rounds. On untouched code, only flag a genuine **`blocker` or `major`** correctness, security, or data-loss bug that was missed earlier (prefix it `[missed-earlier]` with a concrete failure scenario).
+       - Tag every finding `[fix-hunk]` when it sits inside the incremental diff, or `[untouched]` otherwise.
 3. Include these shared review instructions in every round's prompt (plus the member's `calibration` string verbatim if configured in `contract.council.members`):
    - Read-only; do **not** run builds, linters, or tests.
    - Focus on **substantive issues** (correctness, bugs, security, data loss, race conditions, spec compliance, architectural flaws). Ignore stylistic nits and speculative scope creep.
@@ -42,30 +49,45 @@ Crucible uses a **hub-and-spoke adversarial loop**, not unstructured agent-to-ag
 
 ## Judging findings & updating state
 
-1. Archive the round's synthesized findings (accepted fixes, rejected/rebutted items, and scores) into `<run-dir>/council/round-<N>.md`.
-2. Record the round's scores and remaining blockers:
+1. Evaluate every finding on merit (you are the judge, not a rubber stamp):
+   - **Valid blocker / major / clean minor** → accept it; you will apply the minimal fix.
+   - **False positive / contradicts `spec.md` / violates DRY or KISS / scope creep** → reject and append a concise, evidence-backed entry to `<run-dir>/rebuttals.md` (citing exact file/line or spec section).
+   - **Severity inflation** → judge severity yourself with the rubric above. An unlikely multi-condition race or a narrow pixel-math edge case is `minor` unless it loses data, opens a security hole, or breaks an acceptance criterion.
+   - **Genuine product/spec ambiguity** → run `crucible pause <run-dir> --reason "..."` and escalate to the user.
+2. Count what you **accepted** (rebutted findings do not count):
+   - `--blockers`: accepted blockers anywhere.
+   - `--fix-majors`: accepted majors that sit entirely inside the hunks changed since the previous round (`git diff <prevRoundSha>..HEAD`). Always `0` on Round 1.
+   - `--majors`: every other accepted major (on untouched code, or a prior finding still unfixed).
+   - `--areas`: comma-separated files (or tight areas) that drew any accepted finding this round.
+3. Archive the round's synthesized findings (accepted fixes, rejected/rebutted items, scores, counts) into `<run-dir>/council/round-<N>.md`, then record it:
 
 ```sh
 crucible record-council <run-dir> \
   --round <N> \
   --scores '{"Claude Opus 5.5":8,"GPT 6.2 Sol":9,"Gemini 4 Neon":8}' \
-  --blockers 1 \
+  --blockers 0 --majors 0 --fix-majors 1 \
+  --areas "app/player.tsx,lib/queue.ts" \
   --notes "Fixed race in lock cleanup; rebutted speculative caching suggestion"
 ```
 
-3. Evaluate every finding on merit (you are the judge, not a rubber stamp):
-   - **Valid blocker / major / clean minor** → apply the minimal fix.
-   - **False positive / contradicts `spec.md` / violates DRY or KISS / scope creep** → reject and append a concise, evidence-backed entry to `<run-dir>/rebuttals.md` (citing exact file/line or spec section).
-   - **Genuine product/spec ambiguity** → run `crucible pause <run-dir> --reason "..."` and escalate to the user.
-
-4. **Check `record-council` output:**
-   - `passed: true` (`blockers === 0` and every member meets `member.minScore ?? contract.council.minScore`, default `9/10`) → proceed to `crucible gate <run-dir> pr-open`.
+4. **Pass rule** (`contract.council.passRule`):
+   - `convergence` (default): the round passes when there are `0` blockers, `0` majors outside the latest fix hunks, and the **median** score meets `contract.council.minScore`. The median is waived while `--fix-majors > 0`, because those members scored the fix-hunk majors you are about to close. One reviewer holding out on a point you rebutted does not keep the loop spinning.
+   - `scores` (legacy, and contracts signed before `passRule` existed): `0` blockers and every member meets `member.minScore ?? contract.council.minScore`.
+5. **Check `record-council` output:**
+   - `nextAction: "proceed-to-pr-open"` → `crucible gate <run-dir> pr-open`.
+   - `nextAction: "apply-followup-fixes"` (converged with fix-hunk majors left) → fix them, commit, `crucible verify`, then `crucible record-council <run-dir> --followup --notes "..."`. No new council round and no budget spent; the follow-up is listed in the PR's council table notes. Then `crucible gate <run-dir> pr-open`.
    - `nextAction: "fix-and-reverify"`:
      1. Apply all accepted fixes and commit them.
      2. If fixes introduced non-trivial structural edits, do a quick tidy check on the touched hunks.
      3. Re-run `crucible verify <run-dir> -- <verify-command>` so `verifiedSha === HEAD`.
      4. Start Round `N + 1` with fresh `delegate_task` calls (never `t3_thread_send` on old delegates).
-   - `nextAction: "escalate-to-user"` (max rounds reached without passing) → stop and report the exact remaining blockers, scores, and `rebuttals.md` summary to the user.
+   - `nextAction: "redesign-hotspots"` → the same area drew accepted findings in `contract.council.hotspotRounds` (default 2) consecutive failing rounds. Patching it again is how a loop circles. Follow **Before each round → Hot spots**, then continue as for `fix-and-reverify`.
+   - `nextAction: "escalate-to-user"` (max rounds reached without passing) → stop and report the exact remaining blockers, majors, scores, and `rebuttals.md` summary to the user.
+
+## Round caps
+
+- `contract.council.maxRounds` (default 5) caps ordinary runs.
+- UI-heavy or large changes are signed with `crucible sign --heavy`, which lowers the cap to `contract.council.heavyMaxRounds` (default 3). Past round 3 on a big UI diff, reviewers mostly find edge cases in the previous round's fixes; the follow-up path and the hot-spot redesign close those faster than more rounds.
 
 ## Council table for the PR description
 
@@ -83,4 +105,4 @@ Rounds: 2
 | Gemini 4 Neon | 8/10 | 9/10 |
 ```
 
-Never invent a score; write `no score` if a member omitted one.
+Never invent a score; write `no score` if a member omitted one. If a follow-up closed fix-hunk majors, add a line under the table: `Follow-up after round <N>: <what was fixed>`.

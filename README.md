@@ -19,12 +19,15 @@ Built to run on top of your existing subscriptions (Claude, Codex, Antigravity) 
 3. TIDY          2-agent read-only DRY/KISS cleanup pass → apply → verify
                        │
                        ▼
-4. COUNCIL       Bounded hub-and-spoke multi-model review (default max 5 rounds)
+4. COUNCIL       Bounded hub-and-spoke multi-model review (max 5 rounds, 3 if --heavy)
+                 → UI diffs: coordinator renders desktop/phone/320px first
                  → Round 1 exhaustive audit; Round 2+ delta convergence review
                  → severity-anchored rubric + adversarial check before scoring >= 9
                  → coordinator judges findings against code + spec.md
                  → applies valid fixes + logs rejections in rebuttals.md
-                 → exits on 0 blockers & every member >= minScore (default 9/10)
+                 → same area failing twice → recorded redesign, not a third patch
+                 → exits on 0 blockers, 0 majors outside the latest fix hunks,
+                   median >= minScore; fix-hunk majors close as a verified follow-up
                        │
                        ▼
 5. PR & CI       `crucible gate pr-open` → draft PR + council score table
@@ -84,6 +87,10 @@ Create an optional `~/.config/crucible/config.json` (and/or `.crucible.json` ins
       ],
       "minScore": 9,
       "maxRounds": 5,
+      "heavyMaxRounds": 3,
+      "passRule": "convergence",
+      "hotspotRounds": 2,
+      "renderCheck": "auto",
       "specCouncil": "auto"
     },
     "budgets": {
@@ -122,7 +129,13 @@ crucible config --repo /path/to/repo
 
 Each entry in `council.members` also accepts two optional calibration fields:
 - `minScore` (number, `1–10`) — overrides `council.minScore` for that member only.
-- `calibration` (string) — extra review guidance appended verbatim to that member's council prompt.
+- `calibration` (string) — extra review guidance appended verbatim to that member's council prompt. The default GPT member ships with one that keeps unlikely multi-condition races and narrow pixel-math edge cases at `minor`. Replacing `members` in your config replaces that default, so copy it over if you want it.
+
+Council loop settings:
+- `passRule` — `convergence` (default): `0` blockers, `0` accepted majors outside the latest fix hunks, median score `>= minScore`; majors left only in the newest fix hunks are closed with a verified `record-council --followup` instead of another round. `scores`: `0` blockers and every member `>=` its `minScore` (used automatically for contracts signed before `passRule` existed).
+- `heavyMaxRounds` (default `3`) — round cap applied by `crucible sign --heavy` for UI-heavy or large changes.
+- `hotspotRounds` (default `2`) — consecutive failing rounds with accepted findings in the same `--areas` entry before the next round requires `<run-dir>/council/redesign-<N>.md`.
+- `renderCheck` — `auto` (default, UI diffs only), `always`, or `never`: the coordinator drives the app at desktop, phone, and 320px before each round.
 
 ## CLI reference
 
@@ -130,11 +143,12 @@ Each entry in `council.members` also accepts two optional calibration fields:
 | --- | --- |
 | `crucible config [--repo <dir>]` | Print merged defaults + matching profiles + `.crucible.json` |
 | `crucible init <slug> [opts]` | Create run directory with `spec.md`, `contract.json`, `state.json`, `rebuttals.md` |
-| `crucible sign <run-dir>` | Validate `spec.md`, lock `contract.json`, advance `grill` → `implement` |
+| `crucible sign <run-dir> [--heavy]` | Validate `spec.md`, lock `contract.json`, advance `grill` → `implement`; `--heavy` caps council rounds at `heavyMaxRounds` |
 | `crucible lock -- <cmd...>` | Run any heavy command under the machine-wide mutex |
 | `crucible verify <run-dir> -- <cmd...>` | Run verification under the lock and stamp `verifiedSha` on `HEAD` |
 | `crucible record-tidy <run-dir>` | Record completed tidy pass on clean `HEAD` |
-| `crucible record-council <run-dir> --scores <json> --blockers <n>` | Record a council round, evaluate pass/fail, enforce round budget |
+| `crucible record-council <run-dir> --scores <json> --blockers <n> --majors <n> [--fix-majors <n>] [--areas <a,b>]` | Record a council round, evaluate pass/fail, flag hot spots, enforce round budget |
+| `crucible record-council <run-dir> --followup` | Record verified fixes for the fix-hunk majors a converged round left |
 | `crucible record-pr <run-dir> --url <url>` | Record opened PR URL |
 | `crucible record-ci <run-dir> --status <green\|failed>` | Record CI outcome for `HEAD` |
 | `crucible budget <run-dir> <council\|ci\|watch> [--consume]` | Check or consume loop budget; pauses run and exits non-zero when exhausted |

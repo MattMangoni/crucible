@@ -37,7 +37,7 @@ Read the repository's `AGENTS.md` (or `CLAUDE.md`) as well. If `hooks.workflowSk
    - Run `crucible init <slug> --repo <repo-dir> --base <base> --branch <branch> [--ticket <url>]`.
    - Interrogate every ambiguity until zero guesswork remains.
    - Run the upfront Spec Council when `council.specCouncil` is `"always"`, or `"auto"` for medium/large changes.
-   - Finalize `spec.md` and confirm the autonomy contract. Wait for the user's explicit **GO**, then run `crucible sign <run-dir>`.
+   - Finalize `spec.md` and confirm the autonomy contract. Wait for the user's explicit **GO**, then run `crucible sign <run-dir>` (add `--heavy` for UI-heavy or large changes to cap the council at `heavyMaxRounds`).
 2. **Worktree handoff** — If running in T3 Code and not already attached to a dedicated worktree (check `t3_worktree_status`), call `t3_worktree_handoff` for `contract.branch` with a `continuationPrompt` that names `<run-dir>` and resumes at **Step 3 (Implement)**. If `hooks.postWorktreeSetup` is configured, run it right after entering the worktree.
 3. **Implement & Verify** —
    - Implement strictly to `<run-dir>/spec.md`. Do not add speculative scope.
@@ -48,8 +48,9 @@ Read the repository's `AGENTS.md` (or `CLAUDE.md`) as well. If `hooks.workflowSk
    - Run the 2-agent read-only DRY/KISS cleanup pass, apply valid fixes, commit, re-run `crucible verify`, and run `crucible record-tidy <run-dir>`.
    - Advance the gate: `crucible gate <run-dir> council`.
 5. **Council Loop** — Follow [references/council.md](references/council.md).
-   - Run bounded hub-and-spoke multi-model review rounds (default max 5 rounds) until `0` blockers and every council member meets its threshold (`member.minScore ?? minScore`, default `9/10`).
-   - Record every round with `crucible record-council`. If a round requires edits, commit and re-run `crucible verify` before the next round (plus a quick tidy check on heavily refactored files).
+   - Before each round on a UI diff, drive the app at desktop, phone, and 320px viewports and attach a render report (`council.renderCheck`).
+   - Run bounded hub-and-spoke multi-model review rounds (max 5, or 3 when signed `--heavy`) until the round converges: `0` blockers, `0` accepted majors outside the latest fix hunks, and a median score at `minScore` (`council.passRule: "convergence"`).
+   - Record every round with `crucible record-council`. If a round requires edits, commit and re-run `crucible verify` before the next round (plus a quick tidy check on heavily refactored files). Close fix-hunk majors with `record-council --followup`; redesign hot spots instead of patching them a third time.
    - Advance the gate: `crucible gate <run-dir> pr-open`.
 6. **PR Open, CI Green & Mark Ready** — Follow [references/pr-open.md](references/pr-open.md).
    - Run optional `hooks.prePrOpen` / `hooks.prePrOpenSkill`, open a draft PR with the council score table in the description, record it with `crucible record-pr`, and watch CI via `watch_pull_request`.

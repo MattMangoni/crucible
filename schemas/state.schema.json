@@ -28,11 +28,34 @@
           "round": { "type": "integer" },
           "sha": { "type": "string" },
           "scores": { "type": "object" },
+          "medianScore": { "type": "number" },
           "blockers": { "type": "integer" },
+          "majors": { "type": ["integer", "null"] },
+          "fixMajors": { "type": "integer" },
+          "areas": { "type": "array", "items": { "type": "string" } },
+          "hotspots": { "type": "array", "items": { "type": "string" } },
+          "followup": { "type": "boolean" },
           "passed": { "type": "boolean" },
           "notes": { "type": ["string", "null"] },
           "recordedAt": { "type": "string" }
         }
+      }
+    },
+    "councilFollowup": {
+      "type": ["object", "null"],
+      "required": ["round", "majors", "sha"],
+      "properties": {
+        "round": { "type": "integer" },
+        "majors": { "type": "integer" },
+        "sha": { "type": ["string", "null"] }
+      }
+    },
+    "pendingRedesign": {
+      "type": ["object", "null"],
+      "required": ["round", "areas"],
+      "properties": {
+        "round": { "type": "integer" },
+        "areas": { "type": "array", "items": { "type": "string" } }
       }
     },
     "prUrl": { "type": ["string", "null"] },

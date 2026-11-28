@@ -45,7 +45,7 @@
 
 <!-- Confirmed during grilling; mirrored in contract.json. Hard invariants: never merge, never force-push. -->
 - Branch & commits: authorized
-- Tidy & multi-model council loop: authorized (max 3 rounds)
+- Tidy & multi-model council loop: authorized (max 5 rounds, 3 when signed `--heavy`)
 - Open draft PR & fix CI failures: authorized (max 3 CI-fix pushes)
 - Mark PR ready when CI is green & council passed: authorized
 - Watch PR & handle review comments: authorized (max 5 watch pushes)
