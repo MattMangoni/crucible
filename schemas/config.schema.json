@@ -65,6 +65,25 @@
         },
         "minScore": { "type": "number", "minimum": 1, "maximum": 10 },
         "maxRounds": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "heavyMaxRounds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Round cap for UI-heavy or large changes, applied by `crucible sign --heavy`."
+        },
+        "passRule": {
+          "enum": ["convergence", "scores"],
+          "description": "convergence: 0 blockers, 0 accepted majors outside the latest fix hunks, median score >= minScore (waived while fix-hunk majors await a follow-up). scores: 0 blockers and every member >= its minScore."
+        },
+        "hotspotRounds": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "Consecutive failing rounds with accepted findings in the same area before a recorded redesign is required."
+        },
+        "renderCheck": {
+          "enum": ["always", "auto", "never"],
+          "description": "Drive the app at desktop, phone, and 320px viewports before each council round (auto: only when the diff touches UI)."
+        },
         "specCouncil": { "enum": ["always", "auto", "never"] }
       }
     },

@@ -49,11 +49,12 @@ Present a crisp recap:
 - Scope summary + non-goals
 - Verification commands
 - Autonomy contract (including hard invariants: never merge, never force-push, budget caps)
+- Change weight: UI-heavy or large (many files, new flows, layout work) → sign with `--heavy`, which caps the council at `heavyMaxRounds` (default 3)
 
 Do **not** edit repo files or leave Phase 1 until the user explicitly confirms (**GO**). Then run:
 
 ```sh
-crucible sign <run-dir> --base <base> --branch <branch>
+crucible sign <run-dir> --base <base> --branch <branch> [--heavy]
 ```
 
 If `crucible sign` rejects `spec.md`, fill in the missing sections before proceeding.

@@ -13,6 +13,7 @@ import {
   pauseRun,
   recordCi,
   recordCouncil,
+  recordCouncilFollowup,
   recordPr,
   recordTidy,
   recordVerify,
@@ -27,11 +28,12 @@ const USAGE = `crucible — deterministic state machine, lock, and gates for aut
 Usage:
   crucible config [--repo <dir>]
   crucible init <slug> [--repo <dir>] [--base <ref>] [--branch <name>] [--ticket <url>] [--mark-ready true|false] [--force]
-  crucible sign <run-dir> [--base <ref>] [--branch <name>] [--ticket <url>]
+  crucible sign <run-dir> [--base <ref>] [--branch <name>] [--ticket <url>] [--heavy]
   crucible lock [--timeout <sec>] [--cwd <dir>] -- <cmd...>
   crucible verify <run-dir> [--repo <dir>] [--timeout <sec>] -- <cmd...>
   crucible record-tidy <run-dir> [--repo <dir>] [--summary <text>]
-  crucible record-council <run-dir> [--repo <dir>] [--round <n>] --scores <json> --blockers <n> [--notes <text>]
+  crucible record-council <run-dir> [--repo <dir>] [--round <n>] --scores <json> --blockers <n> [--majors <n>] [--fix-majors <n>] [--areas <a,b>] [--notes <text>]
+  crucible record-council <run-dir> --followup [--repo <dir>] [--notes <text>]
   crucible record-pr <run-dir> --url <url> [--ready]
   crucible record-ci <run-dir> [--repo <dir>] --status <green|failed> [--sha <sha>]
   crucible budget <run-dir> <council|ci|watch> [--consume]
@@ -117,6 +119,7 @@ async function main() {
         base: flags.base,
         branch: flags.branch,
         ticket: flags.ticket,
+        heavy: Boolean(flags.heavy),
       });
       printJson(result);
       if (!result.ok) process.exitCode = 1;
@@ -153,6 +156,12 @@ async function main() {
     case "record-council": {
       const runDir = positional[0];
       if (!runDir) throw new Error("record-council requires <run-dir>");
+      if (flags.followup) {
+        const result = recordCouncilFollowup(runDir, { repoDir: flags.repo, notes: flags.notes || null });
+        printJson(result);
+        if (!result.ok) process.exitCode = 1;
+        return;
+      }
       if (!flags.scores) throw new Error("record-council requires --scores <json>");
       if (flags.blockers === undefined) throw new Error("record-council requires --blockers <n>");
       const result = recordCouncil(runDir, {
@@ -160,6 +169,9 @@ async function main() {
         round: flags.round ? Number(flags.round) : undefined,
         scores: JSON.parse(flags.scores),
         blockers: Number(flags.blockers),
+        majors: flags.majors === undefined ? undefined : Number(flags.majors),
+        fixMajors: flags["fix-majors"] === undefined ? 0 : Number(flags["fix-majors"]),
+        areas: typeof flags.areas === "string" ? flags.areas : undefined,
         notes: flags.notes || null,
       });
       printJson(result);
